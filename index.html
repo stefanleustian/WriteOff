@@ -846,7 +846,7 @@ const STORAGE_KEY = 'writeoff_v1';
 const ROUTES_KEY = 'writeoff_routes_v1';
 const THEME_KEY = 'writeoff_theme_v1';
 const SUPA_URL = 'https://xdqsvdpasdpzckkznzcb.supabase.co';
-const _AKEY = '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';
+const _AKEY = '';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkcXN2ZHBhc2RwemNra3puemNiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzOTIyMDgsImV4cCI6MjA5MTk2ODIwOH0.T5S1GSOUU4weGJkEaEznV6ujKC0yepfg858X1eA4cAk';
 
 const _supa = supabase.createClient(SUPA_URL, SUPA_KEY);
@@ -1340,6 +1340,103 @@ async function confirmReceiptReview(){
 function closeReceiptReview(){
   document.getElementById('receipt-review-modal').classList.remove('open');
   resetScan();
+}
+
+
+
+// ── RECEIPT SCANNER ──
+function handleDragOver(e){e.preventDefault();}
+function handleDragLeave(){}
+function handleDrop(e){e.preventDefault();const f=e.dataTransfer.files[0];if(f&&f.type.startsWith('image/')){window._pf=f;document.getElementById('type-modal').classList.add('open');}}
+function handleFileSelect(e){
+  const f=e.target.files[0];
+  if(!f) return;
+  // Skip type modal — go straight to processing
+  processFile(f);
+}
+function compressImage(dataUrl,callback){
+  const img=new Image();
+  img.onload=function(){
+    const MAX=1200; let w=img.width,h=img.height;
+    if(w>h){if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}}else{if(h>MAX){w=Math.round(w*MAX/h);h=MAX;}}
+    const c=document.createElement('canvas');c.width=w;c.height=h;
+    c.getContext('2d').drawImage(img,0,0,w,h);
+    callback(c.toDataURL('image/jpeg',0.75));
+  };
+  img.onerror=function(){ callback(dataUrl); };
+  img.src=dataUrl;
+}
+function processFile(file){
+  const reader=new FileReader();
+  reader.onload=function(e){
+    compressImage(e.target.result,function(compressed){
+      pendingReceipt=compressed;
+      document.getElementById('scan-img').src=compressed;
+      document.getElementById('scan-upload-state').style.display='none';
+      document.getElementById('scan-active-state').style.display='block';
+      document.getElementById('scan-loading-el').style.display='flex';
+      document.getElementById('scan-result-el').style.display='none';
+      document.getElementById('scan-form-el').style.display='none';
+      scanWithAI(compressed);
+    });
+  };
+  reader.onerror=function(){ showToast('Could not read image — try again'); };
+  reader.readAsDataURL(file);
+}
+async function scanWithAI(dataUrl){
+  const base64=dataUrl.split(',')[1];
+  const prompt='You are a bookkeeper for a self-employed professional. Look at this receipt and extract: date, total amount, vendor name, what was purchased, and whether it is a vehicle expense (gas, car repair, insurance, parking) or business expense. Respond ONLY with valid JSON: {"date":"YYYY-MM-DD or null","amount":number or null,"vendor":"name or null","description":"what was purchased","expense_type":"business or vehicle","suggested_category":"if business: Court fees|Equipment / balls|Racket / strings|Coaching certification|Software / apps|Phone / communication|Marketing|Insurance|Professional development|Meals (business)|Other expense — if vehicle: Gas|Oil change|Car insurance|Car repair / maintenance|Other vehicle","confidence":"high or medium or low"}';
+  try{
+    const res=await fetch('https://xdqsvdpasdpzckkznzcb.supabase.co/functions/v1/claude-proxy',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY},
+      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:500,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},{type:'text',text:prompt}]}]})
+    });
+    const data=await res.json();
+    if(!res.ok||!data.content){throw new Error(data.error?.message||'Proxy error');}
+    const raw=data.content.map(i=>i.text||'').join('').replace(/```json|```/g,'').trim();
+    const p=JSON.parse(raw);
+    document.getElementById('scan-loading-el').style.display='none';
+    const isVehicle=p.expense_type==='vehicle';
+    const bizCats=['Court fees','Equipment / balls','Racket / strings','Coaching certification','Software / apps','Phone / communication','Marketing','Insurance','Professional development','Meals (business)','Other expense'];
+    const vehCats=['Gas','Oil change','Car insurance','Car repair / maintenance','Other vehicle'];
+    const cats=isVehicle?vehCats:bizCats;
+    window._scanIsVehicle=isVehicle;
+    // Open review modal
+    const conf=p.confidence||'medium';
+    const confEl=document.getElementById('rr-confidence');
+    confEl.className='rr-confidence '+conf;
+    confEl.textContent=conf.charAt(0).toUpperCase()+conf.slice(1)+' confidence scan';
+    const badge=document.getElementById('rr-type-badge');
+    badge.className='rr-type-badge '+(isVehicle?'rr-vehicle':'rr-business');
+    badge.textContent=isVehicle?'Vehicle expense':'Business expense';
+    badge.style.display='inline-flex';
+    document.getElementById('rr-img').src=dataUrl;
+    document.getElementById('rr-cat').innerHTML=cats.map(c=>'<option'+(c===p.suggested_category?' selected':'')+'>'+c+'</option>').join('');
+    document.getElementById('rr-date').value=p.date||today();
+    document.getElementById('rr-amount').value=p.amount!=null?parseFloat(p.amount).toFixed(2):'';
+    document.getElementById('rr-vendor').value=p.vendor||'';
+    document.getElementById('rr-note').value=p.description||'';
+    document.getElementById('receipt-review-modal').classList.add('open');
+    if(p.confidence==='low') showToast('Low confidence — please verify the details');
+  } catch(err){
+    document.getElementById('scan-loading-el').style.display='none';
+    window._scanIsVehicle=false;
+    // Still open modal so user can enter manually
+    const confEl=document.getElementById('rr-confidence');
+    confEl.className='rr-confidence low';
+    confEl.textContent='Could not read receipt — enter details manually';
+    document.getElementById('rr-type-badge').style.display='none';
+    document.getElementById('rr-img').src=dataUrl;
+    const bizCats=['Court fees','Equipment / balls','Racket / strings','Coaching certification','Software / apps','Phone / communication','Marketing','Insurance','Professional development','Meals (business)','Other expense'];
+    document.getElementById('rr-cat').innerHTML=bizCats.map(c=>'<option>'+c+'</option>').join('');
+    document.getElementById('rr-date').value=today();
+    document.getElementById('rr-amount').value='';
+    document.getElementById('rr-vendor').value='';
+    document.getElementById('rr-note').value='';
+    document.getElementById('receipt-review-modal').classList.add('open');
+    showToast('Could not read — enter details manually');
+  }
 }
 
 
