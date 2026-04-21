@@ -1470,7 +1470,7 @@ async function scanWithAI(dataUrl){
   try{
     const res=await fetch('https://xdqsvdpasdpzckkznzcb.supabase.co/functions/v1/claude-proxy',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY},
       body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:500,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},{type:'text',text:prompt}]}]})
     });
     const data=await res.json();
