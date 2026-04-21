@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en" data-theme="black">
 <head>
@@ -1295,18 +1294,24 @@ async function confirmReceiptReview(){
   const a=parseFloat(document.getElementById('rr-amount').value);
   if(!a||a<=0){showToast('Enter a valid amount');return;}
   const type=window._scanIsVehicle?'vehicle':'expense';
-  const vendor=document.getElementById('rr-vendor').value.trim();
-  const note=document.getElementById('rr-note').value.trim();
-  const noteText=[vendor,note].filter(Boolean).join(' — ')||vendor||'Receipt scan';
+  const vendor=(document.getElementById('rr-vendor').value||'').trim();
+  const note=(document.getElementById('rr-note').value||'').trim();
+  const noteText=[vendor,note].filter(Boolean).join(' — ')||'Receipt scan';
   const date=document.getElementById('rr-date').value||today();
-  const cat=document.getElementById('rr-cat').value;
+  const cat=type==='vehicle'?'Vehicle expense':'Business expense';
   const saveBtn=document.querySelector('#receipt-review-modal .btn-accent');
   if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Saving...';}
-  let receiptStoragePath=null;
+
+  // Always save the entry first — upload is secondary
+  const entryId=Date.now();
+  entries.push({id:entryId,type,date,amount:a,category:cat,note:noteText,receiptImg:pendingReceipt});
+  saveData();refresh();
+
+  // Try to upload to cloud in background
   if(pendingReceipt&&_session){
     try{
       const uid=_session.user.id;
-      const filename=uid+'/'+date+'_'+Date.now()+'.jpg';
+      const filename=uid+'/'+date+'_'+entryId+'.jpg';
       const b64=pendingReceipt.split(',')[1];
       const byteChars=atob(b64);
       const byteArr=new Uint8Array(byteChars.length);
@@ -1318,24 +1323,21 @@ async function confirmReceiptReview(){
         body:blob
       });
       if(uploadRes.ok){
-        receiptStoragePath=filename;
         await supaFetch('POST','/rest/v1/receipts',{
           user_id:uid,storage_path:filename,original_filename:filename,
           file_size:blob.size,mime_type:'image/jpeg',scan_status:'complete',
           scanned_at:new Date().toISOString(),vendor:vendor||null,
           receipt_date:date,total_amount:a,category:cat,expense_type:type
         });
-      } else { console.warn('Upload failed'); }
-    } catch(e){ console.warn('Receipt upload error:',e); }
+      }
+    } catch(e){ console.warn('Cloud upload failed — receipt saved locally',e); }
   }
-  entries.push({id:Date.now(),type,date,amount:a,category:cat,note:noteText,
-    receiptImg:receiptStoragePath?null:pendingReceipt,
-    receiptPath:receiptStoragePath});
-  saveData();refresh();pendingReceipt=null;window._scanIsVehicle=false;
+
+  pendingReceipt=null;window._scanIsVehicle=false;
   document.getElementById('receipt-review-modal').classList.remove('open');
+  if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save expense + receipt';}
   resetScan();
   haptic('success');
-  showSuccess('Receipt saved!',cat||'Expense');
   showToast((type==='vehicle'?'Vehicle':'Business')+' expense saved','success');
 }
 function closeReceiptReview(){
