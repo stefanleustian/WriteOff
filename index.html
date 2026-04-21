@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en" data-theme="black">
 <head>
@@ -1350,10 +1351,7 @@ const VEH_CATS=['Gas','Oil change','Car insurance','Car repair / maintenance','O
 
 function setReceiptType(type){
   window._scanIsVehicle=(type==='vehicle');
-  const cats=type==='vehicle'?VEH_CATS:BIZ_CATS;
-  const cur=document.getElementById('rr-cat').value;
-  document.getElementById('rr-cat').innerHTML=cats.map(c=>'<option'+(c===cur?' selected':'')+'>'+c+'</option>').join('');
-  // Update toggle buttons
+  document.getElementById('rr-cat').value=type==='vehicle'?'Vehicle expense':'Business expense';
   const biz=document.getElementById('rr-toggle-biz');
   const veh=document.getElementById('rr-toggle-veh');
   if(type==='vehicle'){
@@ -1363,11 +1361,6 @@ function setReceiptType(type){
     biz.style.border='1.5px solid #f87171'; biz.style.background='rgba(248,113,113,0.1)'; biz.style.color='#f87171';
     veh.style.border='1.5px solid #2a2a2a'; veh.style.background='transparent'; veh.style.color='#666';
   }
-  // Update badge
-  const badge=document.getElementById('rr-type-badge');
-  badge.className='rr-type-badge '+(type==='vehicle'?'rr-vehicle':'rr-business');
-  badge.textContent=type==='vehicle'?'Vehicle expense':'Business expense';
-  badge.style.display='inline-flex';
 }
 
 // ── RECEIPT SCANNER ──
@@ -1411,7 +1404,7 @@ function processFile(file){
 }
 async function scanWithAI(dataUrl){
   const base64=dataUrl.split(',')[1];
-  const prompt='You are a bookkeeper for a self-employed professional. Look at this receipt and extract: date, total amount, vendor name, what was purchased, and whether it is a vehicle expense (gas, car repair, insurance, parking) or business expense. Respond ONLY with valid JSON: {"date":"YYYY-MM-DD or null","amount":number or null,"vendor":"name or null","description":"what was purchased","expense_type":"business or vehicle","suggested_category":"if business: Court fees|Equipment / balls|Racket / strings|Coaching certification|Software / apps|Phone / communication|Marketing|Insurance|Professional development|Meals (business)|Other expense — if vehicle: Gas|Oil change|Car insurance|Car repair / maintenance|Other vehicle","confidence":"high or medium or low"}';
+  const prompt='Look at this receipt image and extract what you can see. Even if blurry or partial, do your best. Return ONLY valid JSON with no extra text: {"date":"YYYY-MM-DD or null if not visible","amount":number or null,"vendor":"business name or null","description":"brief description of purchase","expense_type":"vehicle if gas/fuel/car repair/oil/tires/parking, otherwise business","confidence":"high or medium or low"}';
   try{
     const res=await fetch('https://xdqsvdpasdpzckkznzcb.supabase.co/functions/v1/claude-proxy',{
       method:'POST',
@@ -1741,14 +1734,14 @@ function obMaybeShow(){
       </div>
       <div class="rr-field"><label>Vendor</label><input type="text" id="rr-vendor" placeholder="Store or business name"/></div>
       <div class="rr-field">
-        <label>Expense type</label>
-        <div style="display:flex;gap:8px;margin-bottom:10px">
-          <button id="rr-toggle-biz" onclick="setReceiptType('business')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #f87171;background:rgba(248,113,113,0.1);color:#f87171;font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer">🧾 Business</button>
-          <button id="rr-toggle-veh" onclick="setReceiptType('vehicle')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #2a2a2a;background:transparent;color:#666;font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer">⛽ Vehicle</button>
+        <label>Where should this go?</label>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button id="rr-toggle-biz" onclick="setReceiptType('business')" style="flex:1;padding:12px 8px;border-radius:10px;border:1.5px solid #f87171;background:rgba(248,113,113,0.1);color:#f87171;font-size:13px;font-weight:600;font-family:var(--font);cursor:pointer">🧾 Business expense</button>
+          <button id="rr-toggle-veh" onclick="setReceiptType('vehicle')" style="flex:1;padding:12px 8px;border-radius:10px;border:1.5px solid #2a2a2a;background:transparent;color:#666;font-size:13px;font-weight:600;font-family:var(--font);cursor:pointer">⛽ Vehicle expense</button>
         </div>
       </div>
-      <div class="rr-field"><label>Category</label><select id="rr-cat"></select></div>
-      <div class="rr-field"><label>Notes</label><input type="text" id="rr-note" placeholder="Optional description"/></div>
+      <input type="hidden" id="rr-cat" value="Other expense"/>
+      <div class="rr-field"><label>Notes</label><input type="text" id="rr-note" placeholder="e.g. Shell gas station, court rental..."/></div>
     </div>
     <div class="rr-footer">
       <button class="btn btn-accent" onclick="confirmReceiptReview()">Save expense + receipt</button>
