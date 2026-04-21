@@ -1344,6 +1344,32 @@ function closeReceiptReview(){
 
 
 
+
+const BIZ_CATS=['Court fees','Equipment / balls','Racket / strings','Coaching certification','Software / apps','Phone / communication','Marketing','Insurance','Professional development','Meals (business)','Other expense'];
+const VEH_CATS=['Gas','Oil change','Car insurance','Car repair / maintenance','Other vehicle'];
+
+function setReceiptType(type){
+  window._scanIsVehicle=(type==='vehicle');
+  const cats=type==='vehicle'?VEH_CATS:BIZ_CATS;
+  const cur=document.getElementById('rr-cat').value;
+  document.getElementById('rr-cat').innerHTML=cats.map(c=>'<option'+(c===cur?' selected':'')+'>'+c+'</option>').join('');
+  // Update toggle buttons
+  const biz=document.getElementById('rr-toggle-biz');
+  const veh=document.getElementById('rr-toggle-veh');
+  if(type==='vehicle'){
+    biz.style.border='1.5px solid #2a2a2a'; biz.style.background='transparent'; biz.style.color='#666';
+    veh.style.border='1.5px solid #fbbf24'; veh.style.background='rgba(251,191,36,0.1)'; veh.style.color='#fbbf24';
+  } else {
+    biz.style.border='1.5px solid #f87171'; biz.style.background='rgba(248,113,113,0.1)'; biz.style.color='#f87171';
+    veh.style.border='1.5px solid #2a2a2a'; veh.style.background='transparent'; veh.style.color='#666';
+  }
+  // Update badge
+  const badge=document.getElementById('rr-type-badge');
+  badge.className='rr-type-badge '+(type==='vehicle'?'rr-vehicle':'rr-business');
+  badge.textContent=type==='vehicle'?'Vehicle expense':'Business expense';
+  badge.style.display='inline-flex';
+}
+
 // ── RECEIPT SCANNER ──
 function handleDragOver(e){e.preventDefault();}
 function handleDragLeave(){}
@@ -1407,16 +1433,18 @@ async function scanWithAI(dataUrl){
     const confEl=document.getElementById('rr-confidence');
     confEl.className='rr-confidence '+conf;
     confEl.textContent=conf.charAt(0).toUpperCase()+conf.slice(1)+' confidence scan';
-    const badge=document.getElementById('rr-type-badge');
-    badge.className='rr-type-badge '+(isVehicle?'rr-vehicle':'rr-business');
-    badge.textContent=isVehicle?'Vehicle expense':'Business expense';
-    badge.style.display='inline-flex';
     document.getElementById('rr-img').src=dataUrl;
-    document.getElementById('rr-cat').innerHTML=cats.map(c=>'<option'+(c===p.suggested_category?' selected':'')+'>'+c+'</option>').join('');
     document.getElementById('rr-date').value=p.date||today();
     document.getElementById('rr-amount').value=p.amount!=null?parseFloat(p.amount).toFixed(2):'';
     document.getElementById('rr-vendor').value=p.vendor||'';
     document.getElementById('rr-note').value=p.description||'';
+    // Set type and categories — also updates toggle buttons and badge
+    setReceiptType(isVehicle?'vehicle':'business');
+    // Pre-select suggested category
+    if(p.suggested_category){
+      const opts=document.getElementById('rr-cat').options;
+      for(let i=0;i<opts.length;i++){if(opts[i].value===p.suggested_category){opts[i].selected=true;break;}}
+    }
     document.getElementById('receipt-review-modal').classList.add('open');
     if(p.confidence==='low') showToast('Low confidence — please verify the details');
   } catch(err){
@@ -1426,14 +1454,12 @@ async function scanWithAI(dataUrl){
     const confEl=document.getElementById('rr-confidence');
     confEl.className='rr-confidence low';
     confEl.textContent='Could not read receipt — enter details manually';
-    document.getElementById('rr-type-badge').style.display='none';
     document.getElementById('rr-img').src=dataUrl;
-    const bizCats=['Court fees','Equipment / balls','Racket / strings','Coaching certification','Software / apps','Phone / communication','Marketing','Insurance','Professional development','Meals (business)','Other expense'];
-    document.getElementById('rr-cat').innerHTML=bizCats.map(c=>'<option>'+c+'</option>').join('');
     document.getElementById('rr-date').value=today();
     document.getElementById('rr-amount').value='';
     document.getElementById('rr-vendor').value='';
     document.getElementById('rr-note').value='';
+    setReceiptType('business');
     document.getElementById('receipt-review-modal').classList.add('open');
     showToast('Could not read — enter details manually');
   }
@@ -1714,6 +1740,13 @@ function obMaybeShow(){
         <div class="rr-field"><label>Amount ($)</label><input type="number" id="rr-amount" placeholder="0.00" min="0" step="0.01"/></div>
       </div>
       <div class="rr-field"><label>Vendor</label><input type="text" id="rr-vendor" placeholder="Store or business name"/></div>
+      <div class="rr-field">
+        <label>Expense type</label>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <button id="rr-toggle-biz" onclick="setReceiptType('business')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #f87171;background:rgba(248,113,113,0.1);color:#f87171;font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer">🧾 Business</button>
+          <button id="rr-toggle-veh" onclick="setReceiptType('vehicle')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #2a2a2a;background:transparent;color:#666;font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer">⛽ Vehicle</button>
+        </div>
+      </div>
       <div class="rr-field"><label>Category</label><select id="rr-cat"></select></div>
       <div class="rr-field"><label>Notes</label><input type="text" id="rr-note" placeholder="Optional description"/></div>
     </div>
