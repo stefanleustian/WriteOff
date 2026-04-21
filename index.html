@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en" data-theme="black">
 <head>
@@ -1096,7 +1095,7 @@ let _pendingDeleteId = null;
 
 let _editId=null;
 function openEdit(id){
-  const e=entries.find(x=>x.id===id); if(!e)return;
+  const e=entries.find(x=>String(x.id)===String(id)); if(!e)return;
   _editId=id;
   document.getElementById('edit-date').value=e.date||today();
   document.getElementById('edit-amount').value=e.amount?e.amount.toFixed(2):'';
@@ -1114,7 +1113,7 @@ function openEdit(id){
   document.getElementById('edit-modal').classList.add('open');
 }
 function saveEdit(){
-  const e=entries.find(x=>x.id===_editId); if(!e)return;
+  const e=entries.find(x=>String(x.id)===String(_editId)); if(!e)return;
   const date=document.getElementById('edit-date').value||today();
   const note=document.getElementById('edit-note').value.trim();
   const cat=document.getElementById('edit-cat').value;
@@ -1139,15 +1138,16 @@ function closeEdit(){
 }
 
 function confirmDelete(id) {
-  const e=entries.find(x=>x.id===id); if(!e)return;
+  // Handle both numeric and UUID string IDs
+  const e=entries.find(x=>String(x.id)===String(id)); if(!e)return;
   _pendingDeleteId=id;
-  const amt=e.type==='mileage'?e.miles.toFixed(1)+' mi':'$'+e.amount.toFixed(2);
+  const amt=e.type==='mileage'?(e.miles||0).toFixed(1)+' mi':'$'+(e.amount||0).toFixed(2);
   document.getElementById('delete-modal-desc').textContent=e.category+' · '+amt+' · '+fmtDate(e.date);
   document.getElementById('delete-modal').classList.add('open');
 }
 function confirmDeleteNow() {
   if(!_pendingDeleteId)return;
-  entries=entries.filter(e=>e.id!==_pendingDeleteId);
+  entries=entries.filter(e=>String(e.id)!==String(_pendingDeleteId));
   saveData();refresh();renderLedger();
   closeDeleteModal(); showToast('Entry deleted');
 }
@@ -1190,7 +1190,7 @@ function renderLedger() {
   list.innerHTML=f.map(e=>{
     const amt=e.type==='mileage'?e.miles.toFixed(1)+' mi':(e.type==='expense'||e.type==='vehicle'?'-':'')+'$'+e.amount.toFixed(2);
     const left=e.receiptImg?`<img class="entry-thumb" src="${e.receiptImg}" alt="Receipt" onclick="viewReceipt(${e.id})">`:`<div class="entry-icon ${e.type}">${icons[e.type]}</div>`;
-    return`<div class="entry">${left}<div class="entry-body"><div class="entry-cat">${e.category}</div><div class="entry-meta">${e.note||'—'}</div></div><div class="entry-right"><div class="entry-amount ${e.type}">${amt}</div><div class="entry-date">${fmtDate(e.date)}</div><div style="display:flex;gap:6px;margin-top:6px"><button style="background:rgba(249,115,22,0.1);border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;color:#f97316;font-family:var(--font)" onclick="openEdit(${e.id})">Edit</button><button class="del-btn" style="position:static;opacity:1" onclick="confirmDelete(${e.id})"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div></div></div>`;
+    return`<div class="entry" onclick="openEdit('${e.id}')" style="cursor:pointer">${left}<div class="entry-body"><div class="entry-cat">${e.category}</div><div class="entry-meta">${e.note||'—'}</div></div><div class="entry-right"><div class="entry-amount ${e.type}">${amt}</div><div class="entry-date">${fmtDate(e.date)}</div></div><button class="del-btn" onclick="event.stopPropagation();confirmDelete('${e.id}')"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>`;
   }).join('');
 }
 async function viewReceipt(id) {
