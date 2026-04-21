@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en" data-theme="black">
 <head>
@@ -307,6 +308,20 @@ body { display: flex; flex-direction: column; max-width: 480px; margin: 0 auto; 
 .rr-vehicle{background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.25);}
 .rr-business{background:rgba(248,113,113,0.1);color:#f87171;border:1px solid rgba(248,113,113,0.2);}
 .rr-footer{padding:0 20px;}
+
+#edit-modal{display:none;position:fixed;inset:0;z-index:99996;background:rgba(0,0,0,0.7);align-items:flex-end;justify-content:center;}
+#edit-modal.open{display:flex;}
+.edit-sheet{background:var(--surface);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:0 0 max(24px,env(safe-area-inset-bottom));max-height:85vh;overflow-y:auto;}
+.edit-handle{width:36px;height:4px;background:var(--border2);border-radius:2px;margin:12px auto 0;}
+.edit-header{padding:16px 20px 12px;border-bottom:1px solid var(--border);}
+.edit-title{font-size:16px;font-weight:600;}
+.edit-body{padding:16px 20px;}
+.edit-field{margin-bottom:12px;}
+.edit-field label{font-size:11px;color:var(--text3);display:block;margin-bottom:5px;font-weight:500;text-transform:uppercase;letter-spacing:0.04em;}
+.edit-field input,.edit-field select{width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid var(--border2);background:var(--surface2);color:var(--text);font-size:14px;font-family:var(--font);}
+.edit-field input:focus,.edit-field select:focus{outline:none;border-color:#f97316;}
+.edit-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.edit-footer{padding:0 20px;display:flex;flex-direction:column;gap:8px;}
 </style>
 </head>
 <body>
@@ -1078,6 +1093,51 @@ function addMileage() {
 
 // ── DELETE ──
 let _pendingDeleteId = null;
+
+let _editId=null;
+function openEdit(id){
+  const e=entries.find(x=>x.id===id); if(!e)return;
+  _editId=id;
+  document.getElementById('edit-date').value=e.date||today();
+  document.getElementById('edit-amount').value=e.amount?e.amount.toFixed(2):'';
+  document.getElementById('edit-miles').value=e.miles?e.miles.toFixed(1):'';
+  document.getElementById('edit-note').value=e.note||'';
+  // Show miles field for mileage entries, hide amount
+  const isMileage=e.type==='mileage';
+  document.getElementById('edit-miles-field').style.display=isMileage?'block':'none';
+  document.getElementById('edit-amount').parentElement.style.display=isMileage?'none':'block';
+  // Set category
+  const catEl=document.getElementById('edit-cat');
+  for(let i=0;i<catEl.options.length;i++){
+    if(catEl.options[i].value===e.category){catEl.selectedIndex=i;break;}
+  }
+  document.getElementById('edit-modal').classList.add('open');
+}
+function saveEdit(){
+  const e=entries.find(x=>x.id===_editId); if(!e)return;
+  const date=document.getElementById('edit-date').value||today();
+  const note=document.getElementById('edit-note').value.trim();
+  const cat=document.getElementById('edit-cat').value;
+  if(e.type==='mileage'){
+    const miles=parseFloat(document.getElementById('edit-miles').value);
+    if(!miles||miles<=0){showToast('Enter valid miles');return;}
+    e.miles=miles;
+  } else {
+    const amount=parseFloat(document.getElementById('edit-amount').value);
+    if(!amount||amount<=0){showToast('Enter valid amount');return;}
+    e.amount=amount;
+  }
+  e.date=date; e.note=note; e.category=cat;
+  saveData();refresh();renderLedger();
+  document.getElementById('edit-modal').classList.remove('open');
+  _editId=null;
+  showToast('Entry updated','success');
+}
+function closeEdit(){
+  document.getElementById('edit-modal').classList.remove('open');
+  _editId=null;
+}
+
 function confirmDelete(id) {
   const e=entries.find(x=>x.id===id); if(!e)return;
   _pendingDeleteId=id;
@@ -1130,7 +1190,7 @@ function renderLedger() {
   list.innerHTML=f.map(e=>{
     const amt=e.type==='mileage'?e.miles.toFixed(1)+' mi':(e.type==='expense'||e.type==='vehicle'?'-':'')+'$'+e.amount.toFixed(2);
     const left=e.receiptImg?`<img class="entry-thumb" src="${e.receiptImg}" alt="Receipt" onclick="viewReceipt(${e.id})">`:`<div class="entry-icon ${e.type}">${icons[e.type]}</div>`;
-    return`<div class="entry">${left}<div class="entry-body"><div class="entry-cat">${e.category}</div><div class="entry-meta">${e.note||'—'}</div></div><div class="entry-right"><div class="entry-amount ${e.type}">${amt}</div><div class="entry-date">${fmtDate(e.date)}</div></div><button class="del-btn" onclick="confirmDelete(${e.id})"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>`;
+    return`<div class="entry">${left}<div class="entry-body"><div class="entry-cat">${e.category}</div><div class="entry-meta">${e.note||'—'}</div></div><div class="entry-right"><div class="entry-amount ${e.type}">${amt}</div><div class="entry-date">${fmtDate(e.date)}</div><div style="display:flex;gap:6px;margin-top:6px"><button style="background:rgba(249,115,22,0.1);border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;color:#f97316;font-family:var(--font)" onclick="openEdit(${e.id})">Edit</button><button class="del-btn" style="position:static;opacity:1" onclick="confirmDelete(${e.id})"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div></div></div>`;
   }).join('');
 }
 async function viewReceipt(id) {
@@ -1748,6 +1808,37 @@ function obMaybeShow(){
     <div class="rr-footer">
       <button class="btn btn-accent" onclick="confirmReceiptReview()">Save expense + receipt</button>
       <button class="btn btn-ghost" onclick="closeReceiptReview()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT ENTRY MODAL -->
+<div id="edit-modal">
+  <div class="edit-sheet">
+    <div class="edit-handle"></div>
+    <div class="edit-header">
+      <div class="edit-title">Edit entry</div>
+    </div>
+    <div class="edit-body">
+      <div class="edit-row">
+        <div class="edit-field"><label>Date</label><input type="date" id="edit-date"/></div>
+        <div class="edit-field"><label>Amount ($)</label><input type="number" id="edit-amount" placeholder="0.00" min="0" step="0.01"/></div>
+      </div>
+      <div class="edit-field" id="edit-miles-field" style="display:none"><label>Miles</label><input type="number" id="edit-miles" placeholder="0.0" min="0" step="0.1"/></div>
+      <div class="edit-field"><label>Category / Note</label><input type="text" id="edit-note" placeholder="Description"/></div>
+      <div class="edit-field" id="edit-cat-field"><label>Category</label>
+        <select id="edit-cat">
+          <option>Private lesson</option><option>Group lesson</option><option>Clinic</option><option>Tournament</option><option>Other income</option>
+          <option>Court fees</option><option>Equipment / balls</option><option>Racket / strings</option><option>Coaching certification</option><option>Software / apps</option><option>Phone / communication</option><option>Marketing</option><option>Insurance</option><option>Professional development</option><option>Meals (business)</option><option>Other expense</option>
+          <option>Gas</option><option>Oil change</option><option>Car insurance</option><option>Car repair / maintenance</option><option>Other vehicle</option>
+          <option>Drive to lesson</option><option>Drive to court</option><option>Equipment run</option><option>Client meeting</option><option>Other</option>
+          <option>Business expense</option><option>Vehicle expense</option>
+        </select>
+      </div>
+    </div>
+    <div class="edit-footer">
+      <button class="btn btn-accent" onclick="saveEdit()">Save changes</button>
+      <button class="btn btn-ghost" onclick="closeEdit()">Cancel</button>
     </div>
   </div>
 </div>
