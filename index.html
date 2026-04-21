@@ -1468,13 +1468,13 @@ async function scanWithAI(dataUrl){
   const base64=dataUrl.split(',')[1];
   const prompt='Look at this receipt image and extract what you can see. Even if blurry or partial, do your best. Return ONLY valid JSON with no extra text: {"date":"YYYY-MM-DD or null if not visible","amount":number or null,"vendor":"business name or null","description":"brief description of purchase","expense_type":"vehicle if gas/fuel/car repair/oil/tires/parking, otherwise business","confidence":"high or medium or low"}';
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{
+    const res=await fetch('https://xdqsvdpasdpzckkznzcb.supabase.co/functions/v1/claude-proxy',{
       method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':_AKEY,'anthropic-version':'2023-06-01'},
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:500,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:'image/jpeg',data:base64}},{type:'text',text:prompt}]}]})
     });
     const data=await res.json();
-    if(!res.ok||!data.content){throw new Error(data.error?.message||'Scan error');}
+    if(!res.ok||!data.content){throw new Error(data.error?.message||'Scan error: '+JSON.stringify(data));}
     const raw=data.content.map(i=>i.text||'').join('').replace(/```json|```/g,'').trim();
     const p=JSON.parse(raw);
     document.getElementById('scan-loading-el').style.display='none';
